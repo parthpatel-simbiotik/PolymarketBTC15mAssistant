@@ -1,0 +1,2 @@
+entry_time,exit_time,side,market_slug,entry_price,exit_outcome,pnl,pnl_pct,status,price_to_beat,settlement_price
+2026-02-01T19:00:01.727Z,2026-02-01T19:15:01.013Z,UP,btc-updown-15m-1769972400,0.52,0,-1,-100.00%,closed,77954.04789326557,77669.28483653336

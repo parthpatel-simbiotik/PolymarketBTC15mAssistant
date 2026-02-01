@@ -19,6 +19,7 @@ import { computeHeikenAshi, countConsecutive } from "./indicators/heikenAshi.js"
 import { detectRegime } from "./engines/regime.js";
 import { scoreDirection, applyTimeAwareness } from "./engines/probability.js";
 import { computeEdge, decide } from "./engines/edge.js";
+import { tick as dummyOrderTick, placeDummyOrder } from "./trading/dummyOrders.js";
 import { appendCsvRow, formatNumber, formatPct, getCandleWindowTiming, sleep } from "./utils.js";
 import { startBinanceTradeStream } from "./data/binanceWs.js";
 import fs from "node:fs";
@@ -595,6 +596,18 @@ async function main() {
       }
 
       const priceToBeat = priceToBeatState.slug === marketSlug ? priceToBeatState.value : null;
+      const tradeContext = {
+        marketSlug,
+        priceToBeat,
+        currentPrice,
+        timeLeftMin: timeLeftMin ?? 0,
+        marketUp: poly.ok ? poly.prices.up : null,
+        marketDown: poly.ok ? poly.prices.down : null
+      };
+      dummyOrderTick(tradeContext);
+      if (rec.action === "ENTER" && rec.side) {
+        placeDummyOrder(rec.side, tradeContext);
+      }
       const currentPriceBaseLine = colorPriceLine({
         label: "CURRENT PRICE",
         price: currentPrice,

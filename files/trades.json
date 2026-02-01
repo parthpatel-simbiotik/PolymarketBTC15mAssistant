@@ -1,0 +1,18 @@
+{
+  "trades": [
+    {
+      "entryTime": "2026-02-01T19:00:01.727Z",
+      "exitTime": "2026-02-01T19:15:01.013Z",
+      "side": "UP",
+      "marketSlug": "btc-updown-15m-1769972400",
+      "entryPrice": 0.52,
+      "exitOutcome": 0,
+      "pnl": -1,
+      "pnlPct": -100,
+      "status": "closed",
+      "priceToBeat": 77954.04789326557,
+      "settlementPrice": 77669.28483653336
+    }
+  ],
+  "updatedAt": "2026-02-01T19:16:16.714Z"
+}
