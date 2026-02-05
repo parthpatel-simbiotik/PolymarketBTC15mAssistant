@@ -670,12 +670,12 @@ async function main() {
         : ANSI.reset;
 
 
-      let pshycoActionLine = 'WAITING FOR BUY OPPORTUNITY...';
       const threshold = 0.7;
       const maxThreshold = 0.98;
       const maxTimeLeft = 4;
       const maxProfitPct = 10;
       const maxLossPct = 30;
+      let pshycoActionLine = `WAITING FOR BUY OPPORTUNITY... ${threshold}/${maxThreshold}/${maxTimeLeft}/${maxProfitPct}/${maxLossPct}`;
       if (pshycoBought) {
         let currentPrice = 0, profit = 0, profitPct = 0;
         if (pshycoBought.direction == 'UP') {
@@ -711,7 +711,9 @@ async function main() {
           } else if (marketDown > threshold && marketDown < maxThreshold) {
             pshycoBought = { boughtAt: marketDown, direction: 'DOWN', marketSlug: marketSlug };
           }
-          pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+          if (pshycoBought) {
+            pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+          }
         }
       }
 
