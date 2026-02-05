@@ -280,6 +280,7 @@ const marketCache = {
   market: null,
   fetchedAtMs: 0
 };
+let pshycoBought = null;
 
 async function resolveCurrentBtc15mMarket() {
   if (CONFIG.polymarket.marketSlug) {
@@ -448,6 +449,7 @@ async function main() {
 
       const settlementMs = poly.ok && poly.market?.endDate ? new Date(poly.market.endDate).getTime() : null;
       const settlementLeftMin = settlementMs ? (settlementMs - Date.now()) / 60_000 : null;
+      const settlementLeftSec = settlementMs ? (settlementMs - Date.now()) / 1000 : null;
 
       const timeLeftMin = settlementLeftMin ?? timing.remainingMinutes;
 
@@ -667,38 +669,77 @@ async function main() {
               : ANSI.reset)
         : ANSI.reset;
 
+
+      let pshycoActionLine = 'WAITING FOR BUY OPPORTUNITY...';
+      const threshold = 0.7;
+      const maxThreshold = 0.98;
+      const maxTimeLeft = 4;
+      const maxProfitPct = 10;
+      const maxLossPct = 30;
+      if (pshycoBought) {
+        let currentPrice = 0, profit = 0, profitPct = 0;
+        if (pshycoBought.direction == 'UP') {
+          currentPrice = marketUp;
+        } else if (pshycoBought.direction == 'DOWN') {
+          currentPrice = marketDown;
+        }
+        profit = currentPrice - pshycoBought.boughtAt;
+        profitPct = (profit / pshycoBought.boughtAt) * 100;
+        pshycoActionLine = `PROFIT (${pshycoBought.direction}: $${pshycoBought.boughtAt}): ${profit.toFixed(2)} (${profitPct.toFixed(2)}%)`;
+
+        if (profitPct > maxProfitPct) {
+          await pshycoTradeLog(currentPrice, profit);
+          pshycoBought = null;
+          pshycoActionLine = 'SELLING AT MAX PROFIT';
+        }
+
+        if (profitPct < 0 && Math.abs(profitPct) > maxLossPct) {
+          await pshycoTradeLog(currentPrice, profit);
+          pshycoBought = null;
+          pshycoActionLine = 'SELLING AT MAX LOSS';
+        }
+
+        if (settlementLeftSec > 0 && settlementLeftSec < 10) {
+          await pshycoTradeLog(currentPrice, profit);
+          pshycoBought = null;
+          pshycoActionLine = 'CLEARING FOR NEW MARKET';
+        }
+      } else if (timeLeftMin <= maxTimeLeft && settlementLeftSec > 10 && (marketUp > threshold || marketDown > threshold)) {
+        if (!pshycoBought) {
+          if (marketUp > threshold && marketUp < maxThreshold) {
+            pshycoBought = { boughtAt: marketUp, direction: 'UP', marketSlug: marketSlug };
+          } else if (marketDown > threshold && marketDown < maxThreshold) {
+            pshycoBought = { boughtAt: marketDown, direction: 'DOWN', marketSlug: marketSlug };
+          }
+          pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+        }
+      }
+
       const lines = [
         titleLine,
         marketLine,
-        kv("Time left:", `${timeColor}${fmtTimeLeft(timeLeftMin)}${ANSI.reset}`),
-        "",
         sepLine(),
-        "",
         kv("TA Predict:", predictValue),
         kv("Heiken Ashi:", heikenLine.split(": ")[1] ?? heikenLine),
         kv("RSI:", rsiLine.split(": ")[1] ?? rsiLine),
         kv("MACD:", macdLine.split(": ")[1] ?? macdLine),
         kv("Delta 1/3:", deltaLine.split(": ")[1] ?? deltaLine),
         kv("VWAP:", vwapLine.split(": ")[1] ?? vwapLine),
-        "",
         sepLine(),
-        "",
         kv("POLYMARKET:", polyHeaderValue),
         liquidity !== null ? kv("Liquidity:", formatNumber(liquidity, 0)) : null,
-        settlementLeftMin !== null ? kv("Time left:", `${polyTimeLeftColor}${fmtTimeLeft(settlementLeftMin)}${ANSI.reset}`) : null,
+        settlementLeftMin !== null ? kv("Time left:", `${polyTimeLeftColor}${fmtTimeLeft(settlementLeftMin)}${ANSI.reset} (${settlementLeftSec.toFixed(0)}s)`) : null,
         priceToBeat !== null ? kv("PRICE TO BEAT: ", `$${formatNumber(priceToBeat, 0)}`) : kv("PRICE TO BEAT: ", `${ANSI.gray}-${ANSI.reset}`),
         currentPriceLine,
-        "",
         sepLine(),
-        "",
         binanceSpotKvLine,
-        "",
         sepLine(),
-        "",
         kv("ET | Session:", `${ANSI.white}${fmtEtTime(new Date())}${ANSI.reset} | ${ANSI.white}${getBtcSession(new Date())}${ANSI.reset}`),
-        "",
         sepLine(),
-        centerText(`${ANSI.dim}${ANSI.gray}created by @krajekis${ANSI.reset}`, screenWidth())
+        kv("ACTION:", actionLine + " | " + rec.side),
+        sepLine(),
+        kv("PSHYCO ACTION:", pshycoActionLine),
+        centerText(`${ANSI.dim}${ANSI.gray}created by @krajekis|updated by @parthpatel${ANSI.reset}`, screenWidth()),
       ].filter((x) => x !== null);
 
       renderScreen(lines.join("\n") + "\n");
@@ -728,6 +769,23 @@ async function main() {
 
     await sleep(CONFIG.pollIntervalMs);
   }
+}
+
+async function pshycoTradeLog(currentPrice, profit) {
+  console.log("pshycoTradeLog", currentPrice, profit);
+  if (!pshycoBought) return;
+  const profitPct = (profit / pshycoBought.boughtAt) * 100;
+  const pheader = ["date", "marketSlug", "direction", "boughtAt", "soldAt", "profit", "profitPct"];
+  fs.mkdirSync("./pshyco-logs", { recursive: true });
+  appendCsvRow("./pshyco-logs/trades.csv", pheader, [
+    new Date().toISOString(),
+    pshycoBought.marketSlug,
+    pshycoBought.direction,
+    pshycoBought.boughtAt,
+    currentPrice.toFixed(2),
+    profit.toFixed(2),
+    profitPct.toFixed(2)
+  ]);
 }
 
 main();
