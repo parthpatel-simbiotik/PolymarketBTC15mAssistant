@@ -281,6 +281,8 @@ const marketCache = {
   fetchedAtMs: 0
 };
 let pshycoBought = null;
+let lastLostMarketSlug = null;
+let lastProfitMarketSlug = null;
 
 async function resolveCurrentBtc15mMarket() {
   if (CONFIG.polymarket.marketSlug) {
@@ -670,51 +672,104 @@ async function main() {
         : ANSI.reset;
 
 
-      const threshold = 0.7;
-      const maxThreshold = 0.98;
-      const maxTimeLeft = 4;
-      const maxProfitPct = 10;
-      const maxLossPct = 30;
-      let pshycoActionLine = `WAITING FOR BUY OPPORTUNITY... ${threshold}/${maxThreshold}/${maxTimeLeft}/${maxProfitPct}/${maxLossPct}`;
+      const t = CONFIG.trading;
+      const threshold = t.entryThreshold;
+      const maxThreshold = t.entryMaxThreshold;
+      const maxTimeLeftMin = t.maxTimeLeftMin;
+      const minTimeLeftMin = t.minTimeLeftMin;
+      const maxProfitPct = t.maxProfitPct;
+      const maxLossPct = t.maxLossPct;
+
+      const inTimeWindow = settlementLeftSec > 5 && timeLeftMin >= minTimeLeftMin && timeLeftMin <= maxTimeLeftMin;
+      const isOnCooldown = (marketSlug !== null && marketSlug !== "") && (
+        (t.cooldownAfterLoss && marketSlug === lastLostMarketSlug) ||
+        (t.cooldownAfterProfit && marketSlug === lastProfitMarketSlug)
+      );
+
+      function spreadPctFor(side) {
+        const ob = side === "UP" ? poly.orderbook?.up : poly.orderbook?.down;
+        if (!ob || ob.spread == null) return null;
+        const mid = (ob.bestBid != null && ob.bestAsk != null) ? (ob.bestBid + ob.bestAsk) / 2 : (side === "UP" ? marketUp : marketDown);
+        if (mid == null || mid <= 0) return null;
+        return (ob.spread / mid) * 100;
+      }
+      const spreadPctUp = poly.ok ? spreadPctFor("UP") : null;
+      const spreadPctDown = poly.ok ? spreadPctFor("DOWN") : null;
+      const askLiqUp = poly.ok && poly.orderbook?.up?.askLiquidity != null ? poly.orderbook.up.askLiquidity : 0;
+      const askLiqDown = poly.ok && poly.orderbook?.down?.askLiquidity != null ? poly.orderbook.down.askLiquidity : 0;
+
+      let pshycoSkipReason = null;
+      if (!inTimeWindow && !pshycoBought) {
+        if (settlementLeftSec <= 5) pshycoSkipReason = "settlement soon";
+        else if (timeLeftMin < minTimeLeftMin) pshycoSkipReason = "time window (too late)";
+        else if (timeLeftMin > maxTimeLeftMin) pshycoSkipReason = "time window (too early)";
+      }
+
+      let pshycoActionLine = `WAITING... thr=${threshold}/${maxThreshold} profit=${maxProfitPct}% loss=${maxLossPct}% time=${maxTimeLeftMin}m to ${minTimeLeftMin}m`;
       if (pshycoBought) {
         let currentPrice = 0, profit = 0, profitPct = 0;
-        if (pshycoBought.direction == 'UP') {
+        if (pshycoBought.direction === "UP") {
           currentPrice = marketUp;
-        } else if (pshycoBought.direction == 'DOWN') {
+        } else if (pshycoBought.direction === "DOWN") {
           currentPrice = marketDown;
         }
         profit = currentPrice - pshycoBought.boughtAt;
         profitPct = (profit / pshycoBought.boughtAt) * 100;
-        pshycoActionLine = `PROFIT (${pshycoBought.direction}: $${pshycoBought.boughtAt}): ${profit.toFixed(2)} (${profitPct.toFixed(2)}%)`;
+        if (pshycoBought.peakProfitPct == null) pshycoBought.peakProfitPct = profitPct;
+        pshycoBought.peakProfitPct = Math.max(pshycoBought.peakProfitPct, profitPct);
+        const peak = pshycoBought.peakProfitPct;
 
-        if (profitPct > maxProfitPct) {
-          await pshycoTradeLog(currentPrice, profit);
-          pshycoBought = null;
-          pshycoActionLine = 'SELLING AT MAX PROFIT';
-        }
+        pshycoActionLine = `PROFIT (${pshycoBought.direction}: ${pshycoBought.boughtAt}): ${profit.toFixed(2)} (${profitPct.toFixed(2)}%) peak=${peak.toFixed(1)}%`;
 
-        if (profitPct < 0 && Math.abs(profitPct) > maxLossPct) {
-          await pshycoTradeLog(currentPrice, profit);
+        if (settlementLeftSec > 0 && settlementLeftSec < 5) {
+          await pshycoTradeLog(currentPrice, profit, "SETTLEMENT");
+          if (t.cooldownAfterProfit && marketSlug && profit > 0) lastProfitMarketSlug = marketSlug;
           pshycoBought = null;
-          pshycoActionLine = 'SELLING AT MAX LOSS';
-        }
-
-        if (settlementLeftSec > 0 && settlementLeftSec < 10) {
-          await pshycoTradeLog(currentPrice, profit);
+          pshycoActionLine = "CLEARING FOR NEW MARKET";
+        } else if (t.maxProfitPrice != null && currentPrice >= t.maxProfitPrice) {
+          await pshycoTradeLog(currentPrice, profit, "MAX_PROFIT_PRICE");
+          if (t.cooldownAfterProfit && marketSlug) lastProfitMarketSlug = marketSlug;
           pshycoBought = null;
-          pshycoActionLine = 'CLEARING FOR NEW MARKET';
+          pshycoActionLine = "SELLING AT MAX PROFIT PRICE";
+        } else if (profitPct > maxProfitPct) {
+          await pshycoTradeLog(currentPrice, profit, "MAX_PROFIT");
+          if (t.cooldownAfterProfit && marketSlug) lastProfitMarketSlug = marketSlug;
+          pshycoBought = null;
+          pshycoActionLine = "SELLING AT MAX PROFIT";
+        } else if (profitPct < 0 && Math.abs(profitPct) >= maxLossPct) {
+          await pshycoTradeLog(currentPrice, profit, "MAX_LOSS");
+          if (t.cooldownAfterLoss && marketSlug) lastLostMarketSlug = marketSlug;
+          pshycoBought = null;
+          pshycoActionLine = "SELLING AT MAX LOSS (cooldown after loss)";
         }
-      } else if (timeLeftMin <= maxTimeLeft && settlementLeftSec > 10 && (marketUp > threshold || marketDown > threshold)) {
-        if (!pshycoBought) {
-          if (marketUp > threshold && marketUp < maxThreshold) {
-            pshycoBought = { boughtAt: marketUp, direction: 'UP', marketSlug: marketSlug };
-          } else if (marketDown > threshold && marketDown < maxThreshold) {
-            pshycoBought = { boughtAt: marketDown, direction: 'DOWN', marketSlug: marketSlug };
-          }
-          if (pshycoBought) {
+      } else if (inTimeWindow && !isOnCooldown && (marketUp > threshold || marketDown > threshold)) {
+        const buyAmount = t.entryBuyAmount;
+        if (marketUp > threshold && marketUp < maxThreshold) {
+          if (spreadPctUp != null && spreadPctUp > t.maxSpreadPct) pshycoSkipReason = "spread too wide (UP)";
+          else if (askLiqUp < t.minLiquidity) pshycoSkipReason = "low liquidity (UP)";
+          else {
+            const boughtAt = marketUp;
+            pshycoBought = { boughtAt, direction: "UP", marketSlug, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
             pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
           }
         }
+        if (!pshycoBought && marketDown > threshold && marketDown < maxThreshold) {
+          if (spreadPctDown != null && spreadPctDown > t.maxSpreadPct) pshycoSkipReason = pshycoSkipReason || "spread too wide (DOWN)";
+          else if (askLiqDown < t.minLiquidity) pshycoSkipReason = pshycoSkipReason || "low liquidity (DOWN)";
+          else {
+            const boughtAt = marketDown;
+            pshycoBought = { boughtAt, direction: "DOWN", marketSlug, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+            pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+          }
+        }
+        if (!pshycoBought && isOnCooldown) pshycoSkipReason = "COOLDOWN";
+      } else if (isOnCooldown) {
+        pshycoSkipReason = "COOLDOWN";
+      }
+
+      if (pshycoBought) pshycoSkipReason = null;
+      if (pshycoSkipReason) {
+        pshycoActionLine += ` | SKIP: ${pshycoSkipReason}`;
       }
 
       const lines = [
@@ -741,7 +796,7 @@ async function main() {
         kv("ACTION:", actionLine + " | " + rec.side),
         sepLine(),
         kv("PSHYCO ACTION:", pshycoActionLine),
-        centerText(`${ANSI.dim}${ANSI.gray}created by @krajekis|updated by @parthpatel${ANSI.reset}`, screenWidth()),
+        centerText(`${ANSI.dim}${ANSI.gray}created by @krajekis | updated by @parthpatel5 ${ANSI.reset}`, screenWidth()),
       ].filter((x) => x !== null);
 
       renderScreen(lines.join("\n") + "\n");
@@ -773,20 +828,32 @@ async function main() {
   }
 }
 
-async function pshycoTradeLog(currentPrice, profit) {
-  console.log("pshycoTradeLog", currentPrice, profit);
+async function pshycoTradeLog(soldAt, profit, exitReason) {
+  console.log("pshycoTradeLog", soldAt, profit, exitReason);
   if (!pshycoBought) return;
-  const profitPct = (profit / pshycoBought.boughtAt) * 100;
-  const pheader = ["date", "marketSlug", "direction", "boughtAt", "soldAt", "profit", "profitPct"];
-  fs.mkdirSync("./pshyco-logs", { recursive: true });
-  appendCsvRow("./pshyco-logs/trades.csv", pheader, [
+  const boughtAt = pshycoBought.boughtAt;
+  const profitPct = (profit / boughtAt) * 100;
+  const qty = pshycoBought.qty ?? (pshycoBought.buyAmount != null ? pshycoBought.buyAmount / boughtAt : null);
+  const buyAmount = pshycoBought.buyAmount ?? (qty != null ? boughtAt * qty : null);
+  const soldAmount = qty != null ? soldAt * qty : null;
+  const profitAmount = (buyAmount != null && soldAmount != null) ? soldAmount - buyAmount : null;
+  const peak = pshycoBought.peakProfitPct;
+  const pheader = ["date", "marketSlug", "direction", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
+  fs.mkdirSync("./logs/pshyco-v2", { recursive: true });
+  appendCsvRow("./logs/pshyco-v2/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
-    pshycoBought.boughtAt,
-    currentPrice.toFixed(2),
+    boughtAt,
+    Number(soldAt).toFixed(2),
+    qty != null ? qty.toFixed(4) : "",
+    buyAmount != null ? buyAmount.toFixed(2) : "",
+    soldAmount != null ? soldAmount.toFixed(2) : "",
+    profitAmount != null ? profitAmount.toFixed(2) : "",
     profit.toFixed(2),
-    profitPct.toFixed(2)
+    profitPct.toFixed(2),
+    exitReason ?? "",
+    peak != null ? peak.toFixed(2) : ""
   ]);
 }
 

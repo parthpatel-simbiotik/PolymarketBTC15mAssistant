@@ -31,5 +31,20 @@ export const CONFIG = {
     polygonWssUrls: (process.env.POLYGON_WSS_URLS || "").split(",").map((s) => s.trim()).filter(Boolean),
     polygonWssUrl: process.env.POLYGON_WSS_URL || "",
     btcUsdAggregator: process.env.CHAINLINK_BTC_USD_AGGREGATOR || "0xc907E116054Ad103354f2D350FD2514433D57F6f"
+  },
+
+  trading: {
+    entryThreshold: 0.8,
+    entryMaxThreshold: 0.98,
+    maxProfitPct: 15,
+    maxLossPct: 18,
+    maxTimeLeftMin: 4,
+    minTimeLeftMin: 1,
+    minLiquidity: 500,
+    maxSpreadPct: 3,
+    cooldownAfterLoss: true,
+    cooldownAfterProfit: true,
+    maxProfitPrice: 0.999,
+    entryBuyAmount: 1
   }
 };
