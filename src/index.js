@@ -839,8 +839,8 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
   const profitAmount = (buyAmount != null && soldAmount != null) ? soldAmount - buyAmount : null;
   const peak = pshycoBought.peakProfitPct;
   const pheader = ["date", "marketSlug", "direction", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
-  fs.mkdirSync("./logs/pshyco-v2", { recursive: true });
-  appendCsvRow("./logs/pshyco-v2/trades.csv", pheader, [
+  fs.mkdirSync("./logs/pshyco-v3", { recursive: true });
+  appendCsvRow("./logs/pshyco-v3/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
