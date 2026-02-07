@@ -749,7 +749,7 @@ async function main() {
           else if (askLiqUp < t.minLiquidity) pshycoSkipReason = "low liquidity (UP)";
           else {
             const boughtAt = marketUp;
-            pshycoBought = { boughtAt, direction: "UP", marketSlug, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+            pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
             pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
           }
         }
@@ -758,7 +758,7 @@ async function main() {
           else if (askLiqDown < t.minLiquidity) pshycoSkipReason = pshycoSkipReason || "low liquidity (DOWN)";
           else {
             const boughtAt = marketDown;
-            pshycoBought = { boughtAt, direction: "DOWN", marketSlug, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+            pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
             pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
           }
         }
@@ -838,12 +838,15 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
   const soldAmount = qty != null ? soldAt * qty : null;
   const profitAmount = (buyAmount != null && soldAmount != null) ? soldAmount - buyAmount : null;
   const peak = pshycoBought.peakProfitPct;
-  const pheader = ["date", "marketSlug", "direction", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
-  fs.mkdirSync("./logs/pshyco-v3", { recursive: true });
-  appendCsvRow("./logs/pshyco-v3/trades.csv", pheader, [
+  const pheader = ["date", "marketSlug", "direction", "predictValue", "macdLine", "ptbDeltaText", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
+  fs.mkdirSync("./logs/pshyco-v4", { recursive: true });
+  appendCsvRow("./logs/pshyco-v4/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
+    pshycoBought.predictValue,
+    pshycoBought.macdLine,
+    pshycoBought.ptbDeltaText,
     boughtAt,
     Number(soldAt).toFixed(2),
     qty != null ? qty.toFixed(4) : "",
