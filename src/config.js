@@ -38,13 +38,14 @@ export const CONFIG = {
     entryMaxThreshold: 0.98,
     maxProfitPct: 15,
     maxLossPct: 18,
-    maxTimeLeftMin: 3,
+    maxTimeLeftMin: 8,
     minTimeLeftMin: 0,
     minLiquidity: 500,
     maxSpreadPct: 3,
     cooldownAfterLoss: true,
     cooldownAfterProfit: true,
     maxProfitPrice: 0.999,
-    entryBuyAmount: 1
+    entryBuyAmount: 1,
+    minPredictValue: 0.52,
   }
 };

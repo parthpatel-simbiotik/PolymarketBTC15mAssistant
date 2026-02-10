@@ -544,7 +544,6 @@ async function main() {
         ? (pLong > pShort ? "LONG" : pShort > pLong ? "SHORT" : "NEUTRAL")
         : "NEUTRAL";
       const predictValue = `${ANSI.green}LONG${ANSI.reset} ${ANSI.green}${formatProbPct(pLong, 0)}${ANSI.reset} / ${ANSI.red}SHORT${ANSI.reset} ${ANSI.red}${formatProbPct(pShort, 0)}${ANSI.reset}`;
-      const predictLine = `Predict: ${predictValue}`;
 
       const marketUpStr = `${marketUp ?? "-"}${marketUp === null || marketUp === undefined ? "" : "¢"}`;
       const marketDownStr = `${marketDown ?? "-"}${marketDown === null || marketDown === undefined ? "" : "¢"}`;
@@ -744,25 +743,36 @@ async function main() {
         }
       } else if (inTimeWindow && !isOnCooldown && (marketUp > threshold || marketDown > threshold)) {
         const buyAmount = t.entryBuyAmount;
-        if (marketUp > threshold && marketUp < maxThreshold) {
-          if (spreadPctUp != null && spreadPctUp > t.maxSpreadPct) pshycoSkipReason = "spread too wide (UP)";
-          else if (askLiqUp < t.minLiquidity) pshycoSkipReason = "low liquidity (UP)";
-          else {
-            const boughtAt = marketUp;
-            pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
-            pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+        const isExpanding = macdLine.includes("expanding");
+        const isPTBDeltaUnderLimit = ptbDelta != null && Math.abs(ptbDelta) < 80;
+        
+        if (isExpanding) {
+          pshycoSkipReason = "MACD is expanding";
+        } else if (isPTBDeltaUnderLimit) {
+          pshycoSkipReason = "PTB Delta is under limit";
+        } else {
+          if (marketUp > threshold && marketUp < maxThreshold) {
+            if (spreadPctUp != null && spreadPctUp > t.maxSpreadPct) pshycoSkipReason = "spread too wide (UP)";
+            else if (askLiqUp < t.minLiquidity) pshycoSkipReason = "low liquidity (UP)";
+            else if (pLong < t.minPredictValue) pshycoSkipReason = "predict too low (UP)";
+            else {
+              const boughtAt = marketUp;
+              pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+            }
           }
-        }
-        if (!pshycoBought && marketDown > threshold && marketDown < maxThreshold) {
-          if (spreadPctDown != null && spreadPctDown > t.maxSpreadPct) pshycoSkipReason = pshycoSkipReason || "spread too wide (DOWN)";
-          else if (askLiqDown < t.minLiquidity) pshycoSkipReason = pshycoSkipReason || "low liquidity (DOWN)";
-          else {
-            const boughtAt = marketDown;
-            pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
-            pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+          if (!pshycoBought && marketDown > threshold && marketDown < maxThreshold) {
+            if (spreadPctDown != null && spreadPctDown > t.maxSpreadPct) pshycoSkipReason = pshycoSkipReason || "spread too wide (DOWN)";
+            else if (askLiqDown < t.minLiquidity) pshycoSkipReason = pshycoSkipReason || "low liquidity (DOWN)";
+            else if (pShort < t.minPredictValue) pshycoSkipReason = "predict too low (DOWN)";
+            else {
+              const boughtAt = marketDown;
+              pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
+            }
           }
+          if (!pshycoBought && isOnCooldown) pshycoSkipReason = "COOLDOWN";
         }
-        if (!pshycoBought && isOnCooldown) pshycoSkipReason = "COOLDOWN";
       } else if (isOnCooldown) {
         pshycoSkipReason = "COOLDOWN";
       }
@@ -776,7 +786,7 @@ async function main() {
         titleLine,
         marketLine,
         sepLine(),
-        kv("TA Predict:", predictValue),
+        kv("TA Predict:", `${predictValue} (Narrative: ${predictNarrative})`),
         kv("Heiken Ashi:", heikenLine.split(": ")[1] ?? heikenLine),
         kv("RSI:", rsiLine.split(": ")[1] ?? rsiLine),
         kv("MACD:", macdLine.split(": ")[1] ?? macdLine),
@@ -839,14 +849,14 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
   const profitAmount = (buyAmount != null && soldAmount != null) ? soldAmount - buyAmount : null;
   const peak = pshycoBought.peakProfitPct;
   const pheader = ["date", "marketSlug", "direction", "predictValue", "macdLine", "ptbDeltaText", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
-  fs.mkdirSync("./logs/pshyco-v4", { recursive: true });
-  appendCsvRow("./logs/pshyco-v4/trades.csv", pheader, [
+  fs.mkdirSync("./logs/pshyco-v5", { recursive: true });
+  appendCsvRow("./logs/pshyco-v5/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
     pshycoBought.predictValue,
     pshycoBought.macdLine,
-    pshycoBought.ptbDeltaText,
+    pshycoBought.ptbDelta,
     boughtAt,
     Number(soldAt).toFixed(2),
     qty != null ? qty.toFixed(4) : "",
