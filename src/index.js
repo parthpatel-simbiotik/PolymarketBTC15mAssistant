@@ -716,6 +716,8 @@ async function main() {
         profitPct = (profit / pshycoBought.boughtAt) * 100;
         if (pshycoBought.peakProfitPct == null) pshycoBought.peakProfitPct = profitPct;
         pshycoBought.peakProfitPct = Math.max(pshycoBought.peakProfitPct, profitPct);
+        if (pshycoBought.peakLossPct == null) pshycoBought.peakLossPct = profitPct;
+        pshycoBought.peakLossPct = Math.min(pshycoBought.peakLossPct, profitPct);
         const peak = pshycoBought.peakProfitPct;
 
         pshycoActionLine = `PROFIT (${pshycoBought.direction}: ${pshycoBought.boughtAt}): ${profit.toFixed(2)} (${profitPct.toFixed(2)}%) peak=${peak.toFixed(1)}%`;
@@ -757,7 +759,7 @@ async function main() {
             else if (pLong < t.minPredictValue) pshycoSkipReason = "predict too low (UP)";
             else {
               const boughtAt = marketUp;
-              pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, peakLossPct: 0, buyAmount, qty: buyAmount / boughtAt };
               pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
             }
           }
@@ -767,7 +769,7 @@ async function main() {
             else if (pShort < t.minPredictValue) pshycoSkipReason = "predict too low (DOWN)";
             else {
               const boughtAt = marketDown;
-              pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, peakLossPct: 0, buyAmount, qty: buyAmount / boughtAt };
               pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
             }
           }
@@ -848,9 +850,10 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
   const soldAmount = qty != null ? soldAt * qty : null;
   const profitAmount = (buyAmount != null && soldAmount != null) ? soldAmount - buyAmount : null;
   const peak = pshycoBought.peakProfitPct;
-  const pheader = ["date", "marketSlug", "direction", "predictValue", "macdLine", "ptbDeltaText", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct"];
-  fs.mkdirSync("./logs/pshyco-v5", { recursive: true });
-  appendCsvRow("./logs/pshyco-v5/trades.csv", pheader, [
+  const peakLoss = pshycoBought.peakLossPct;
+  const pheader = ["date", "marketSlug", "direction", "predictValue", "macdLine", "ptbDeltaText", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct", "peakLossPct"];
+  fs.mkdirSync("./logs/pshyco-v6", { recursive: true });
+  appendCsvRow("./logs/pshyco-v6/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
@@ -866,7 +869,8 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
     profit.toFixed(2),
     profitPct.toFixed(2),
     exitReason ?? "",
-    peak != null ? peak.toFixed(2) : ""
+    peak != null ? peak.toFixed(2) : "",
+    peakLoss != null ? peakLoss.toFixed(2) : ""
   ]);
 }
 
