@@ -757,7 +757,7 @@ async function main() {
             else if (pLong < t.minPredictValue) pshycoSkipReason = "predict too low (UP)";
             else {
               const boughtAt = marketUp;
-              pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoBought = { boughtAt, direction: "UP", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
               pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
             }
           }
@@ -767,7 +767,7 @@ async function main() {
             else if (pShort < t.minPredictValue) pshycoSkipReason = "predict too low (DOWN)";
             else {
               const boughtAt = marketDown;
-              pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDeltaText, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
+              pshycoBought = { boughtAt, direction: "DOWN", marketSlug, predictValue, macdLine, ptbDelta, peakProfitPct: 0, buyAmount, qty: buyAmount / boughtAt };
               pshycoActionLine = `BUYING AT ${pshycoBought.boughtAt} ${pshycoBought.direction}`;
             }
           }
