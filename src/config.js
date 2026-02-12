@@ -37,7 +37,7 @@ export const CONFIG = {
     entryThreshold: 0.8,
     entryMaxThreshold: 0.98,
     maxProfitPct: 15,
-    maxLossPct: 18,
+    maxLossPct: 5,
     maxTimeLeftMin: 5,
     minTimeLeftMin: 0,
     minLiquidity: 500,

@@ -852,8 +852,8 @@ async function pshycoTradeLog(soldAt, profit, exitReason) {
   const peak = pshycoBought.peakProfitPct;
   const peakLoss = pshycoBought.peakLossPct;
   const pheader = ["date", "marketSlug", "direction", "predictValue", "macdLine", "ptbDeltaText", "boughtAt", "soldAt", "qty", "buyAmount", "soldAmount", "profitAmount", "profit", "profitPct", "exitReason", "peakProfitPct", "peakLossPct"];
-  fs.mkdirSync("./logs/pshyco-v6", { recursive: true });
-  appendCsvRow("./logs/pshyco-v6/trades.csv", pheader, [
+  fs.mkdirSync("./logs/pshyco-v7", { recursive: true });
+  appendCsvRow("./logs/pshyco-v7/trades.csv", pheader, [
     new Date().toISOString(),
     pshycoBought.marketSlug,
     pshycoBought.direction,
